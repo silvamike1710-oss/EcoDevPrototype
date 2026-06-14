@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoDev AI — Auditoria de Código</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── TASKBAR ──────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    EcoDev AI
+    <span class="badge">BETA</span>
+  </div>
+  <div class="header-right">Auditoria Financeira e Técnica de Código com IA</div>
+</header>
+
+<div class="layout">
+
+  <!-- ── LEFT PANEL ────────────────────────────────────────────────────── -->
+  <div class="win-panel">
+
+    <!-- Titlebar -->
+    <div class="win-titlebar">
+      <div class="win-titlebar-title">
+        <span>📄</span> Código para Analisar
+      </div>
+      <div class="win-titlebar-btns">
+        <div class="win-btn">_</div>
+        <div class="win-btn">□</div>
+        <div class="win-btn">✕</div>
+      </div>
+    </div>
+
+    <!-- File name -->
+    <div class="panel-content">
+      <div class="panel-label">Nome do arquivo</div>
+      <input type="text" id="filename" placeholder="ex: api_handler.py" value="openai_handler.py">
+    </div>
+
+    <!-- Code input -->
+    <div class="panel-content" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="panel-label">Código</div>
+      <textarea id="code" spellcheck="false" placeholder="Cole seu código Python aqui..."></textarea>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="panel-content">
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeCode()">
+          <span id="btnText">⚡ ANALISAR</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Examples -->
+    <div class="panel-content">
+      <div class="panel-label">Exemplos rápidos</div>
+      <div class="example-chips">
+        <button class="chip" onclick="loadExample('loop')">for loop com API OpenAI</button>
+        <button class="chip" onclick="loadExample('nosystem')">Sem system message / sem cache</button>
+        <button class="chip" onclick="loadExample('injection')">Prompt injection via input</button>
+        <button class="chip" onclick="loadExample('model')">GPT-4o onde 4o-mini resolve</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Provider + API key -->
+    <div class="panel-content" style="margin-top:auto;">
+      <div class="panel-label">Provedor</div>
+      <select id="provider" onchange="updateProviderHint()" style="margin-bottom:8px;">
+        <option value="mock">[ DEMO — sem chave necessária ]</option>
+        <option value="gemini">Google Gemini (grátis)</option>
+        <option value="anthropic">Anthropic Claude</option>
+      </select>
+
+      <div class="panel-label" style="margin-top:6px;">Chave de API</div>
+      <div class="key-row">
+        <input type="password" id="apiKey" placeholder="não necessário no modo demo">
+        <button class="btn-small" onclick="saveKey()">SALVAR</button>
+      </div>
+      <div id="keyStatus" class="key-status">[ DEMO MODE — sem chave necessária ]</div>
+    </div>
+
+    <!-- Win95 statusbar -->
+    <div class="statusbar">
+      <div class="statusbar-cell">CTRL+ENTER = ANALISAR</div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT PANEL ───────────────────────────────────────────────────── -->
+  <div class="right">
+
+    <!-- Titlebar -->
+    <div class="win-titlebar">
+      <div class="win-titlebar-title">
+        <span>🔍</span> Diagnóstico
+      </div>
+      <div class="win-titlebar-btns">
+        <div class="win-btn">_</div>
+        <div class="win-btn">□</div>
+        <div class="win-btn">✕</div>
+      </div>
+    </div>
+
+    <!-- Mock mode banner -->
+    <div class="mock-banner" id="mockBanner">
+      ⚠ MODO DEMO — resultados simulados para fins de apresentação
+    </div>
+
+    <!-- Loader -->
+    <div class="loader" id="loader">
+      <div class="spinner"></div>
+      ANALISANDO CÓDIGO...
+    </div>
+
+    <!-- Results -->
+    <div class="results-body" id="resultsBody">
+      <div class="empty" id="emptyState">
+        <div class="empty-icon">🖥</div>
+        <h3>NENHUMA ANÁLISE</h3>
+        <p>Cole um código no painel esquerdo e clique em ANALISAR, ou escolha DEMO para ver um exemplo.</p>
+      </div>
+    </div>
+
+    <!-- Win95 statusbar -->
+    <div class="statusbar">
+      <div class="statusbar-cell danger-cell" id="statCrit">CRITICOS: —</div>
+      <div class="statusbar-cell warn-cell"   id="statWarn">AVISOS: —</div>
+      <div class="statusbar-cell danger-cell" id="statCost">DESPERD: —</div>
+      <div class="statusbar-cell"             id="statCount">ITENS: —</div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
