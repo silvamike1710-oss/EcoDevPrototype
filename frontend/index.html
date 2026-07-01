@@ -71,21 +71,15 @@
 
     <div class="divider"></div>
 
-    <!-- Provider + API key -->
+    <!-- Provider -->
     <div class="panel-content" style="margin-top:auto;">
       <div class="panel-label">Provedor</div>
       <select id="provider" onchange="updateProviderHint()" style="margin-bottom:8px;">
-        <option value="mock">[ DEMO — sem chave necessária ]</option>
-        <option value="gemini">Google Gemini (grátis)</option>
+        <option value="mock">[ DEMO — resultado simulado ]</option>
+        <option value="gemini">Google Gemini</option>
         <option value="anthropic">Anthropic Claude</option>
       </select>
-
-      <div class="panel-label" style="margin-top:6px;">Chave de API</div>
-      <div class="key-row">
-        <input type="password" id="apiKey" placeholder="não necessário no modo demo">
-        <button class="btn-small" onclick="saveKey()">SALVAR</button>
-      </div>
-      <div id="keyStatus" class="key-status">[ DEMO MODE — sem chave necessária ]</div>
+      <div id="keyStatus" class="key-status">[ DEMO MODE — resultado simulado ]</div>
     </div>
 
     <!-- Win95 statusbar -->

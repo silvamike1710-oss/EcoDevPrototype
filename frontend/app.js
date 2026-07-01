@@ -199,44 +199,17 @@ def call_api(msg):
 function updateProviderHint() {
   const p = document.getElementById('provider').value;
   const hints = {
-    mock:      '[ DEMO MODE — sem chave necessária ]',
-    gemini:    'Gemini grátis: aistudio.google.com → Get API Key',
-    anthropic: 'Anthropic: console.anthropic.com → API Keys'
-  };
-  const placeholders = {
-    mock:      'não necessário no modo demo',
-    gemini:    'AIza...',
-    anthropic: 'sk-ant-...'
+    mock:      '[ DEMO MODE — resultado simulado ]',
+    gemini:    '[ Analisado pelo backend via Gemini ]',
+    anthropic: '[ Analisado pelo backend via Claude ]'
   };
   document.getElementById('keyStatus').textContent = hints[p];
   document.getElementById('keyStatus').style.color = p === 'mock' ? 'var(--warn)' : 'var(--muted)';
-  document.getElementById('apiKey').placeholder = placeholders[p];
-  document.getElementById('apiKey').disabled    = p === 'mock';
-}
-
-function saveKey() {
-  const key      = document.getElementById('apiKey').value.trim();
-  const provider = document.getElementById('provider').value;
-  sessionStorage.setItem('ecodev_provider', provider);
-  if (key) {
-    sessionStorage.setItem('ecodev_key', key);
-    document.getElementById('keyStatus').textContent = '[ CHAVE SALVA NA SESSÃO ]';
-    document.getElementById('keyStatus').style.color = 'var(--accent)';
-  }
 }
 
 window.onload = () => {
-  const saved    = sessionStorage.getItem('ecodev_key');
   const provider = sessionStorage.getItem('ecodev_provider') || 'mock';
-
   document.getElementById('provider').value = provider;
-
-  if (saved) {
-    document.getElementById('apiKey').value = saved;
-    document.getElementById('keyStatus').textContent = '[ CHAVE CARREGADA ]';
-    document.getElementById('keyStatus').style.color = 'var(--accent)';
-  }
-
   updateProviderHint();
   loadExample('loop');
 };
@@ -349,71 +322,26 @@ function switchTab(tab, targetId) {
 }
 
 // ── API CALLS ────────────────────────────────────────────────────────────
+// A chave de API NUNCA fica no navegador. O front só fala com o nosso
+// próprio backend (main.py), que guarda as chaves como variável de
+// ambiente no servidor e faz a chamada real pra Anthropic/Gemini.
 
-const SYSTEM_PROMPT = `Você é o EcoDev AI, um auditor especializado em código que usa APIs de IA.
-Identifique problemas de custo, performance e segurança.
+// Em produção, troque pela URL do backend depois do deploy (ex: Render).
+const BACKEND_URL = 'http://localhost:8000';
 
-Retorne APENAS JSON válido, sem texto antes ou depois, sem backticks:
-
-{
-  "summary": "resumo em 1 frase",
-  "findings": [
-    {
-      "severity": "critical|warning|info|ok",
-      "title": "título curto",
-      "description": "explicação em 1-2 frases",
-      "line_reference": "linha X-Y ou null",
-      "estimated_monthly_waste_usd": 120,
-      "problematic_code": "trecho problemático",
-      "suggested_fix_code": "versão corrigida",
-      "fix_explanation": "por que esta correção economiza dinheiro"
-    }
-  ]
-}
-
-Calcule estimated_monthly_waste_usd com base em produção real. 2-5 findings. APENAS JSON.`;
-
-async function callAnthropic(apiKey, userMsg) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMsg }]
-    })
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message || `Anthropic HTTP ${res.status}`);
-  }
-  const data = await res.json();
-  return data.content[0].text.trim();
-}
-
-async function callGemini(apiKey, userMsg) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
+async function callBackend(provider, filename, code) {
+  const res = await fetch(`${BACKEND_URL}/api/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-      generationConfig: { maxOutputTokens: 2000, temperature: 0.2 }
-    })
+    body: JSON.stringify({ provider, filename, code })
   });
+
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message || `Gemini HTTP ${res.status}`);
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Erro no backend (HTTP ${res.status})`);
   }
-  const data = await res.json();
-  return data.candidates[0].content.parts[0].text.trim();
+
+  return res.json(); // já vem como { summary, findings } — sem parse manual
 }
 
 // ── MAIN ANALYZE ─────────────────────────────────────────────────────────
@@ -421,13 +349,11 @@ async function callGemini(apiKey, userMsg) {
 async function analyzeCode() {
   const code     = document.getElementById('code').value.trim();
   const filename = document.getElementById('filename').value.trim();
-  const provider = document.getElementById('provider').value
-                   || sessionStorage.getItem('ecodev_provider') || 'mock';
-  const apiKey   = document.getElementById('apiKey').value.trim()
-                   || sessionStorage.getItem('ecodev_key');
+  const provider = document.getElementById('provider').value || 'mock';
 
   if (!code) return alert('Cole um código para analisar.');
-  if (provider !== 'mock' && !apiKey) return alert('Insira sua chave de API.');
+
+  sessionStorage.setItem('ecodev_provider', provider);
 
   const btn    = document.getElementById('analyzeBtn');
   const loader = document.getElementById('loader');
@@ -440,25 +366,16 @@ async function analyzeCode() {
   body.innerHTML = '';
   banner.classList.remove('visible');
 
-  const userMsg = `Arquivo: ${filename || 'código.py'}\n\n\`\`\`python\n${code}\n\`\`\`\n\nAnalise e retorne o JSON de diagnóstico.`;
-
   try {
     let result;
 
     if (provider === 'mock') {
-      // simulate a short delay so it feels real
+      // simula uma latência curta pra parecer uma análise real
       await new Promise(r => setTimeout(r, 900));
       result = MOCK_RESULT;
       banner.classList.add('visible');
     } else {
-      let raw;
-      if (provider === 'anthropic') {
-        raw = await callAnthropic(apiKey, userMsg);
-      } else {
-        raw = await callGemini(apiKey, userMsg);
-      }
-      const clean = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-      result = JSON.parse(clean);
+      result = await callBackend(provider, filename || 'codigo.py', code);
     }
 
     loader.classList.remove('visible');
