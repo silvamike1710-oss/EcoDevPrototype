@@ -346,7 +346,7 @@ function switchTab(tab, targetId) {
 // ambiente no servidor e faz a chamada real pra Anthropic/Gemini.
 
 // Em produção, troque pela URL do backend depois do deploy (ex: Render).
-const BACKEND_URL = 'https://ecodevprototype.onrender.com/';
+const BACKEND_URL = 'https://ecodevprototype.onrender.com';
 
 async function callBackend(provider, filename, code) {
   const res = await fetch(`${BACKEND_URL}/api/analyze`, {
