@@ -229,7 +229,7 @@ function highlight(code) {
 
 // ── RENDER ───────────────────────────────────────────────────────────────
 
-function renderFindings(findings) {
+function renderFindings(findings, filesAnalyzed = [], summaryText = null) {
   const body = document.getElementById('resultsBody');
   body.innerHTML = '';
 
@@ -249,6 +249,24 @@ function renderFindings(findings) {
   document.getElementById('statCrit').className  = 'statusbar-cell' + (criticals > 0 ? ' danger-cell' : '');
   document.getElementById('statWarn').className  = 'statusbar-cell' + (warnings > 0  ? ' warn-cell'   : '');
   document.getElementById('statCost').className  = 'statusbar-cell' + (totalSaved > 0 ? ' danger-cell' : '');
+
+  if (filesAnalyzed.length > 1) {
+    const filesEl = document.createElement('div');
+    filesEl.className = 'panel-hint';
+    filesEl.style.padding = '8px 12px';
+    filesEl.textContent = `📂 ${filesAnalyzed.length} arquivo(s) analisado(s): ${filesAnalyzed.join(', ')}`;
+    body.appendChild(filesEl);
+  }
+
+  if (findings.length === 0) {
+    body.innerHTML += `
+      <div class="empty">
+        <div class="empty-icon">✅</div>
+        <h3>NENHUM PROBLEMA ENCONTRADO</h3>
+        <p>${summaryText || 'A IA não identificou problemas relevantes.'}</p>
+      </div>`;
+    return;
+  }
 
   // summary bar
   const summaryEl = document.createElement('div');
@@ -284,6 +302,7 @@ function renderFindings(findings) {
       <div class="finding-header">
         <div class="severity-dot ${sevClass}"></div>
         <div style="flex:1">
+          ${f.file ? `<div class="file-tag">📄 ${f.file}</div>` : ''}
           <div class="finding-title">${f.title}</div>
           <div class="finding-desc">${f.description}</div>
         </div>
@@ -341,18 +360,44 @@ async function callBackend(provider, filename, code) {
     throw new Error(err.detail || `Erro no backend (HTTP ${res.status})`);
   }
 
-  return res.json(); // já vem como { summary, findings } — sem parse manual
+  return res.json();
+}
+
+async function callBackendRepo(provider, repoUrl) {
+  const res = await fetch(`${BACKEND_URL}/api/analyze-repo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, repo_url: repoUrl })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Erro no backend (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+// ── MODE TOGGLE (snippet vs repositório) ────────────────────────────────
+
+let currentMode = 'code';
+
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeBtnCode').classList.toggle('active', mode === 'code');
+  document.getElementById('modeBtnRepo').classList.toggle('active', mode === 'repo');
+  document.querySelectorAll('.mode-code').forEach(el => el.style.display = mode === 'code' ? '' : 'none');
+  document.querySelectorAll('.mode-repo').forEach(el => el.style.display = mode === 'repo' ? '' : 'none');
+}
+
+function loadRepoExample(repo) {
+  document.getElementById('repoUrl').value = repo;
 }
 
 // ── MAIN ANALYZE ─────────────────────────────────────────────────────────
 
 async function analyzeCode() {
-  const code     = document.getElementById('code').value.trim();
-  const filename = document.getElementById('filename').value.trim();
   const provider = document.getElementById('provider').value || 'mock';
-
-  if (!code) return alert('Cole um código para analisar.');
-
   sessionStorage.setItem('ecodev_provider', provider);
 
   const btn    = document.getElementById('analyzeBtn');
@@ -360,39 +405,67 @@ async function analyzeCode() {
   const body   = document.getElementById('resultsBody');
   const banner = document.getElementById('mockBanner');
 
-  btn.disabled = true;
-  document.getElementById('btnText').textContent = 'AGUARDE...';
-  loader.classList.add('visible');
-  body.innerHTML = '';
-  banner.classList.remove('visible');
+  if (currentMode === 'code') {
+    const code     = document.getElementById('code').value.trim();
+    const filename = document.getElementById('filename').value.trim();
+    if (!code) return alert('Cole um código para analisar.');
 
-  try {
-    let result;
+    btn.disabled = true;
+    document.getElementById('btnText').textContent = 'AGUARDE...';
+    loader.classList.add('visible');
+    body.innerHTML = '';
+    banner.classList.remove('visible');
 
-    if (provider === 'mock') {
-      // simula uma latência curta pra parecer uma análise real
-      await new Promise(r => setTimeout(r, 900));
-      result = MOCK_RESULT;
-      banner.classList.add('visible');
-    } else {
-      result = await callBackend(provider, filename || 'codigo.py', code);
+    try {
+      let result;
+      if (provider === 'mock') {
+        await new Promise(r => setTimeout(r, 900));
+        result = MOCK_RESULT;
+        banner.classList.add('visible');
+      } else {
+        result = await callBackend(provider, filename || 'codigo.py', code);
+      }
+      loader.classList.remove('visible');
+      renderFindings(result.findings || [], result.files_analyzed || []);
+    } catch (err) {
+      showError(err);
+    } finally {
+      btn.disabled = false;
+      document.getElementById('btnText').textContent = '⚡ ANALISAR';
     }
 
-    loader.classList.remove('visible');
-    renderFindings(result.findings || []);
+  } else {
+    const repoUrl = document.getElementById('repoUrl').value.trim();
+    if (!repoUrl) return alert('Informe um repositório do GitHub (ex: owner/repo).');
+    if (provider === 'mock') return alert('Modo repositório precisa de um provider real (Gemini ou Anthropic).');
 
-  } catch (err) {
-    loader.classList.remove('visible');
-    body.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">⚠</div>
-        <h3>ERRO NA ANÁLISE</h3>
-        <p style="color:var(--danger);font-family:var(--mono);font-size:12px;">${err.message}</p>
-      </div>`;
-  } finally {
-    btn.disabled = false;
-    document.getElementById('btnText').textContent = '⚡ ANALISAR';
+    btn.disabled = true;
+    document.getElementById('btnText').textContent = 'ANALISANDO REPO...';
+    loader.classList.add('visible');
+    body.innerHTML = '';
+    banner.classList.remove('visible');
+
+    try {
+      const result = await callBackendRepo(provider, repoUrl);
+      loader.classList.remove('visible');
+      renderFindings(result.findings || [], result.files_analyzed || [], result.summary);
+    } catch (err) {
+      showError(err);
+    } finally {
+      btn.disabled = false;
+      document.getElementById('btnText').textContent = '⚡ ANALISAR';
+    }
   }
+}
+
+function showError(err) {
+  document.getElementById('loader').classList.remove('visible');
+  document.getElementById('resultsBody').innerHTML = `
+    <div class="empty">
+      <div class="empty-icon">⚠</div>
+      <h3>ERRO NA ANÁLISE</h3>
+      <p style="color:var(--danger);font-family:var(--mono);font-size:12px;">${err.message}</p>
+    </div>`;
 }
 
 // Ctrl+Enter shortcut
